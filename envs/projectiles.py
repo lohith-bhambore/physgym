@@ -165,6 +165,7 @@ class Projectiles:
             d = _distractor(rng)
             params["distractor"] = d
             parts.append(d["text"])
+        parts.append(f"Use g = {G} m/s².")
         if difficulty >= 3:
             parts.append(f"Express your answer in {answer_unit}.")
         parts.append(BOXED)

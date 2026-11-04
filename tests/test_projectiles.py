@@ -186,8 +186,8 @@ def test_length_answers_are_not_shown_in_absurd_magnitudes():
         for p in generate(FAMILY, 400, d, seed=23):
             if p.answer_unit == "km":
                 assert p.answer_value >= 1, p.question
-            if p.answer_unit in ("cm", "ft", "km"):
-                assert p.answer_value < 1000 or p.answer_unit == "ft", p.question
+            if p.answer_unit in ("cm", "km"):
+                assert p.answer_value < 1000, p.question
 
 
 # ---------- 4. difficulty 4 distractor ----------
@@ -258,3 +258,68 @@ def test_problem_i_does_not_depend_on_batch_size():
     small = generate(FAMILY, 10, 3, seed=7)
     large = generate(FAMILY, 1000, 3, seed=7)
     assert small == large[:10]
+
+
+# ---------- g is stated in every question ----------
+
+G_SENTENCE = "Use g = 9.81 m/s²."
+
+
+def test_every_question_states_g_before_the_answer_instructions():
+    for d in range(1, 5):
+        for p in generate(FAMILY, 100, d, seed=31):
+            q = p.question
+            assert q.count(G_SENTENCE) == 1, q
+            assert q.index(G_SENTENCE) < q.index("Give your final answer as"), q
+            if "Express your answer" in q:
+                assert q.index(G_SENTENCE) < q.index("Express your answer"), q
+
+
+# ---------- end-to-end oracle ----------
+# Independent of solve(), pint and params: parse the question text, convert with
+# hand-written factors, recompute with formulas written out here.
+
+import re
+
+_FT = 0.3048  # m
+_KMH = 1 / 3.6  # m/s per km/h
+_G = 9.81
+_TO_ASKED = {"m": 1.0, "cm": 100.0, "ft": 1 / 0.3048, "km": 1 / 1000.0, "s": 1.0, "ms": 1000.0}
+
+
+def _oracle_answer(template: str, question: str) -> tuple[float, str]:
+    body = question.split(" Use g = ")[0]  # inputs live before the g sentence
+
+    sp = re.search(r"(\d+(?:\.\d+)?) (m/s|km/h)(?!²)", body)
+    assert sp, question
+    v = float(sp.group(1)) * (1.0 if sp.group(2) == "m/s" else _KMH)
+
+    th = re.search(r"(\d+)°(?!C)", body)
+    ht = re.search(r"(\d+(?:\.\d+)?) (m|ft)\b(?!/)", body)
+
+    if template == "from_cliff":
+        assert ht, question
+        H = float(ht.group(1)) * (1.0 if ht.group(2) == "m" else _FT)
+        ans = v * math.sqrt(2 * H / _G)
+        base = "m"
+    else:
+        assert th, question
+        a = math.radians(float(th.group(1)))
+        if template == "max_height":
+            ans, base = (v * math.sin(a)) ** 2 / (2 * _G), "m"
+        elif template == "time_of_flight":
+            ans, base = 2 * v * math.sin(a) / _G, "s"
+        else:  # range
+            ans, base = v * v * math.sin(2 * a) / _G, "m"
+
+    asked = re.search(r"Express your answer in (\w+)\.", question)
+    unit = asked.group(1) if asked else base
+    return ans * _TO_ASKED[unit], unit
+
+
+@pytest.mark.parametrize("difficulty", [1, 2, 3, 4])
+def test_oracle_recomputes_answer_from_question_text_alone(difficulty):
+    for p in generate(FAMILY, 500, difficulty, seed=77):
+        expected, unit = _oracle_answer(p.template, p.question)
+        assert p.answer_unit == unit, p.question
+        assert p.answer_value == pytest.approx(expected, rel=1e-6), p.question
