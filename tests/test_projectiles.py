@@ -252,3 +252,9 @@ def test_smoke_1000_problems_all_templates_and_difficulties(capsys):
     for p in (problems[0], problems[400], problems[999]):
         print(f"\n[{p.id}]\n{p.question}\n-> {p.answer_value:.4g} {p.answer_unit}")
     assert capsys.readouterr().out  # the examples were printed
+
+
+def test_problem_i_does_not_depend_on_batch_size():
+    small = generate(FAMILY, 10, 3, seed=7)
+    large = generate(FAMILY, 1000, 3, seed=7)
+    assert small == large[:10]
