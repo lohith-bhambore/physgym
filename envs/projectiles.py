@@ -52,7 +52,18 @@ def solve(template: str, params: dict) -> float:
 
 
 _SI_ANSWER_UNIT = {"max_height": "m", "range": "m", "from_cliff": "m", "time_of_flight": "s"}
-_ALT_UNITS = {"m": ("cm", "km", "ft"), "s": ("ms", "min")}
+
+
+def _alt_answer_units(si_unit: str, si_value: float) -> tuple[str, ...]:
+    """Non-SI answer units that fit the magnitude (cm only < 2 m, km only >= 1 km)."""
+    if si_unit == "s":
+        return ("ms",)
+    units = ["ft"]
+    if si_value < 2:
+        units.append("cm")
+    if si_value >= 1000:
+        units.append("km")
+    return tuple(units)
 
 # ---------- question text ----------
 # {v} {theta} {H} are pre-formatted "value unit" strings.
@@ -106,10 +117,11 @@ class Projectiles:
         v_unit, H_unit = "m/s", "m"
         if difficulty >= 2:
             if template == "from_cliff":
-                # convert speed, or height (cm / ft); one of them stays SI
-                choice = ("speed", "cm", "ft")[int(rng.integers(3))]
+                # convert speed (km/h) or height (ft); the other stays SI.
+                # cm is never used: cliffs are 5-100 m, far above the ~2 m cm cutoff.
+                choice = ("speed", "ft")[int(rng.integers(2))]
                 v_unit = "km/h" if choice == "speed" else "m/s"
-                H_unit = choice if choice in ("cm", "ft") else "m"
+                H_unit = "ft" if choice == "ft" else "m"
             else:
                 v_unit = "km/h"
 
@@ -120,7 +132,6 @@ class Projectiles:
         theta = int(rng.integers(15, 76))
         H_disp = {
             "m": int(rng.integers(5, 101)),
-            "cm": int(rng.integers(5, 101)) * 100,
             "ft": int(rng.integers(math.ceil(5 / 0.3048), math.floor(100 / 0.3048) + 1)),
         }[H_unit]
 
@@ -136,10 +147,10 @@ class Projectiles:
         # --- answer ---
         si_unit = _SI_ANSWER_UNIT[template]
         answer_unit = si_unit
-        if difficulty >= 3:
-            alts = _ALT_UNITS[si_unit]
-            answer_unit = alts[int(rng.integers(len(alts)))]
         si_answer = solve(template, params)
+        if difficulty >= 3:
+            alts = _alt_answer_units(si_unit, si_answer)
+            answer_unit = alts[int(rng.integers(len(alts)))]
         answer_value = (si_answer * ureg(si_unit)).to(answer_unit).magnitude
 
         # --- text ---

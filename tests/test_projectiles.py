@@ -125,7 +125,7 @@ def test_level_2_uses_mixed_input_units_but_si_answer():
     probs = generate(FAMILY, 300, 2, seed=5)
     assert all(p.answer_unit in ("m", "s") for p in probs)
     text = " ".join(p.question for p in probs)
-    assert "km/h" in text and "cm" in text and "ft" in text
+    assert "km/h" in text and "ft" in text
 
 
 def test_level_3_asks_for_non_si_answer_unit():
@@ -156,6 +156,38 @@ def test_level_1_inputs_are_rounded():
             assert p.params["theta_deg"] == round(p.params["theta_deg"])
         if "H" in p.params:
             assert p.params["H"] == round(p.params["H"])
+
+
+# ---------- display units fit the magnitude ----------
+
+def test_cm_is_only_used_for_values_under_2_m():
+    import re
+
+    for d in range(1, 5):
+        for p in generate(FAMILY, 400, d, seed=21):
+            for num in re.findall(r"(\d+(?:\.\d+)?) cm\b", p.question):
+                assert float(num) <= 200, p.question  # inputs shown in cm
+            if p.answer_unit == "cm":
+                assert p.answer_value <= 200, (p.question, p.answer_value)
+
+
+def test_heights_in_questions_use_m_or_ft_and_speeds_use_ms_or_kmh():
+    import re
+
+    for d in range(1, 5):
+        for p in generate(FAMILY, 300, d, seed=22):
+            body = p.question.split(" Express your answer")[0]
+            units = set(re.findall(r"\d(?:\.\d+)? (m/s|km/h|m|ft|cm|km)\b", body))
+            assert units <= {"m/s", "km/h", "m", "ft"}, (units, p.question)
+
+
+def test_length_answers_are_not_shown_in_absurd_magnitudes():
+    for d in (3, 4):
+        for p in generate(FAMILY, 400, d, seed=23):
+            if p.answer_unit == "km":
+                assert p.answer_value >= 1, p.question
+            if p.answer_unit in ("cm", "ft", "km"):
+                assert p.answer_value < 1000 or p.answer_unit == "ft", p.question
 
 
 # ---------- 4. difficulty 4 distractor ----------
